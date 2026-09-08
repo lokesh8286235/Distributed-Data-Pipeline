@@ -1,10 +1,12 @@
 #pragma once
 
+#include <atomic>
 #include <condition_variable>
 #include <cstddef>
 #include <mutex>
 #include <optional>
 #include <queue>
+#include <stdexcept>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -14,7 +16,9 @@ namespace pipeline {
 template <typename T>
 class BoundedQueue {
 public:
-    explicit BoundedQueue(std::size_t capacity) : capacity_(capacity) {}
+    explicit BoundedQueue(std::size_t capacity) : capacity_(capacity) {
+        if (capacity_ == 0) throw std::invalid_argument("capacity must be > 0");
+    }
 
     bool push(T value) {
         std::unique_lock lock(mutex_);
@@ -42,10 +46,15 @@ public:
         not_full_.notify_all();
     }
 
+    std::size_t size() const {
+        std::lock_guard lock(mutex_);
+        return queue_.size();
+    }
+
 private:
     std::size_t capacity_;
     std::queue<T> queue_;
-    std::mutex mutex_;
+    mutable std::mutex mutex_;
     std::condition_variable not_empty_;
     std::condition_variable not_full_;
     bool closed_{false};
@@ -53,28 +62,38 @@ private:
 
 template <typename T, typename Fn>
 std::size_t run(std::size_t producers, std::size_t workers, std::size_t tasks, Fn fn) {
+    if (producers == 0 || workers == 0) return 0;
+
     BoundedQueue<T> queue(256);
     std::vector<std::thread> producer_threads;
     std::vector<std::thread> worker_threads;
+    std::atomic<std::size_t> processed{0};
 
-    const std::size_t per_producer = tasks / producers;
+    const std::size_t base = tasks / producers;
     const std::size_t remainder = tasks % producers;
+    std::size_t next_task = 0;
+    std::mutex task_mutex;
 
     for (std::size_t p = 0; p < producers; ++p) {
         producer_threads.emplace_back([&, p] {
-            const std::size_t count = per_producer + (p < remainder ? 1 : 0);
+            const std::size_t count = base + (p < remainder ? 1 : 0);
+            std::size_t start = 0;
+            {
+                std::lock_guard lock(task_mutex);
+                start = next_task;
+                next_task += count;
+            }
             for (std::size_t i = 0; i < count; ++i) {
-                queue.push(static_cast<T>(p * per_producer + i));
+                queue.push(static_cast<T>(start + i));
             }
         });
     }
 
-    std::atomic<std::size_t> processed{0};
     for (std::size_t w = 0; w < workers; ++w) {
         worker_threads.emplace_back([&] {
             while (auto item = queue.pop()) {
                 fn(*item);
-                ++processed;
+                processed.fetch_add(1, std::memory_order_relaxed);
             }
         });
     }
@@ -82,7 +101,7 @@ std::size_t run(std::size_t producers, std::size_t workers, std::size_t tasks, F
     for (auto& thread : producer_threads) thread.join();
     queue.close();
     for (auto& thread : worker_threads) thread.join();
-    return processed.load();
+    return processed.load(std::memory_order_relaxed);
 }
 
 }  // namespace pipeline
