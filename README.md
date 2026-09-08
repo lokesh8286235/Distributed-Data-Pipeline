@@ -1,8 +1,17 @@
 # Distributed Data Pipeline
 
-> C++17 concurrency and performance-engineering laboratory focused on **lock-free communication, work stealing, memory behavior, and measurable throughput**.
+> C++17 concurrency and performance-engineering laboratory focused on **lock-free communication, work stealing, memory behavior, correctness, and measurable throughput**.
 
-The project explores how scheduler design, synchronization, cache locality, and memory management affect high-throughput CPU workloads.
+This project explores how scheduler design, synchronization, cache locality, and memory management shape high-throughput CPU workloads. Python is used for orchestration and benchmark automation; performance-critical execution remains in C++.
+
+## Why this project stands out
+
+This is deliberately systems-oriented rather than framework-oriented. The core questions are:
+
+- Where does contention become the bottleneck?
+- How should work move between workers under uneven load?
+- How do synchronization and memory behavior affect throughput?
+- Can an optimization improve performance without weakening concurrency correctness?
 
 ## Architecture
 
@@ -27,47 +36,70 @@ The project explores how scheduler design, synchronization, cache locality, and 
                 Output
 ```
 
-Python handles orchestration and benchmark automation; performance-critical execution remains in C++.
-
 ## What it demonstrates
 
-- Lock-free SPSC/MPSC-style queue design
-- Work-stealing scheduling
-- Multi-threaded task execution
-- Memory and resource management
-- Stress and concurrency testing
-- Benchmark-driven optimization
-- Reproducible Dockerized development
-- CI validation with GitHub Actions
+| Area | Evidence |
+|---|---|
+| Concurrency | Lock-free queue patterns, worker threads, work stealing |
+| Performance | Benchmark-driven optimization and throughput measurement |
+| Correctness | GoogleTest, stress workloads, edge-case coverage |
+| Memory | Explicit resource management and Valgrind validation |
+| Profiling | Linux `perf` and benchmark analysis |
+| Reproducibility | CMake + Docker + scripted benchmarks |
+| Engineering discipline | GitHub Actions CI and regression checks |
 
 ## Performance
 
-Reported project results include:
+Reported project benchmark results include:
 
 - **100,000+ tasks** processed per execution
 - **40% throughput improvement** over the baseline implementation
 - **25% lower CPU utilization** while maintaining throughput
 - **Zero memory leaks detected** during Valgrind validation
 
-Treat these as project benchmark results; reproduce the benchmark locally before using them as externally validated performance claims.
+These are **project benchmark results**. Reproduce the benchmark locally before treating them as externally validated performance claims.
 
-## Why these techniques?
+## Optimization approach
 
-### Lock-free queues
-Reduce mutex contention on high-frequency producer/consumer paths.
+```text
+Baseline
+   │
+   ▼
+Profile with perf / benchmarks
+   │
+   ▼
+Identify contention / scheduling / memory bottleneck
+   │
+   ▼
+Change one design variable
+   │
+   ▼
+Run correctness + stress tests
+   │
+   ▼
+Benchmark against baseline
+   │
+   ▼
+Keep only measured improvements
+```
+
+## Key design choices
+
+### Lock-free communication
+Reduce mutex contention on high-frequency producer/consumer paths where the workload benefits from non-blocking coordination.
 
 ### Work stealing
-Allow idle workers to acquire work from busy workers instead of relying on static partitioning.
+Allow idle workers to acquire work from busy workers instead of depending entirely on static partitioning.
 
-### Cache-aware design
-Data placement and access patterns can dominate performance once synchronization overhead is reduced.
+### Cache-aware thinking
+Once synchronization overhead falls, data placement and access patterns can become dominant contributors to runtime.
 
-### Profiling first
-Optimization is driven by `perf`, Valgrind, benchmarks, and regression checks rather than intuition.
+### Profile first
+Optimization is driven by measurements from `perf`, Valgrind, benchmarks, and regression checks rather than intuition.
 
-## Testing
+## Testing strategy
 
-The test strategy covers:
+The test plan covers:
 
 - Queue correctness
 - Scheduler behavior
@@ -75,8 +107,20 @@ The test strategy covers:
 - Edge cases
 - Stress workloads
 - Benchmark regression
+- Memory validation
 
 **Framework:** GoogleTest
+
+## Repository structure
+
+```text
+src/         # concurrency and pipeline implementation
+tests/       # automated correctness and stress tests
+benchmarks/  # performance workloads and comparisons
+scripts/     # orchestration / benchmark tooling
+docs/        # design notes
+.github/     # CI workflows
+```
 
 ## Tooling
 
@@ -87,29 +131,16 @@ The test strategy covers:
 **Environment:** Docker  
 **CI:** GitHub Actions
 
-## Repository structure
-
-```text
-src/         # concurrency and pipeline implementation
-tests/       # automated tests
-benchmarks/  # performance workloads
-scripts/     # orchestration / benchmark tooling
-docs/        # design notes
-.github/     # CI workflows
-```
-
-Use the repository tree as the source of truth for the current implementation.
-
 ## Engineering takeaways
 
 1. Contention can dominate an otherwise efficient algorithm.
-2. Work distribution matters as much as raw worker count.
+2. Work distribution can matter as much as raw worker count.
 3. Cache locality becomes increasingly important in throughput-sensitive systems.
-4. Performance improvements are only useful when correctness survives concurrency.
+4. Performance improvements only matter when concurrency correctness survives.
 
 ## Status
 
-🚧 Active systems-engineering project.
+🚧 **Active systems-engineering project**
 
 ## Author
 
